@@ -1,0 +1,88 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  linux:
+    name: Ubuntu — build, test, package .deb
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install system packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config \
+            libxkbcommon-dev libwayland-dev libx11-dev libxcursor-dev libxrandr-dev libxi-dev \
+            libgl1-mesa-dev libegl1-mesa-dev
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+      - name: Format
+        run: cargo fmt --check
+      - name: Clippy
+        run: cargo clippy --all-targets --locked -- -D warnings
+      - name: Test
+        run: cargo test --locked
+      - name: Install cargo-bundle
+        run: cargo install cargo-bundle --locked
+      - name: Build .deb
+        run: ./scripts/build-deb.sh
+      - name: Check the package installs
+        run: |
+          sudo apt-get install -y ./target/release/bundle/deb/*.deb
+          dpkg -L courier | grep -E 'bin/courier|\.desktop|icons' 
+      - uses: actions/upload-artifact@v7
+        with:
+          name: courier-linux-deb
+          path: target/release/bundle/deb/*.deb
+
+  macos:
+    name: macOS — build, test, package app
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Test
+        run: cargo test --locked
+      - name: Install cargo-bundle
+        run: cargo install cargo-bundle --locked
+      - name: Build Courier.app
+        run: |
+          cargo bundle --release --format osx
+          codesign --force --deep -s - target/release/bundle/osx/Courier.app
+          ditto -c -k --keepParent target/release/bundle/osx/Courier.app Courier-macos-arm64.zip
+      - uses: actions/upload-artifact@v7
+        with:
+          name: courier-macos-arm64
+          path: Courier-macos-arm64.zip
+
+  windows:
+    name: Windows — build, test, package .exe
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Test
+        run: cargo test --locked
+      - name: Build Courier.exe
+        run: cargo build --release --locked
+      - name: Package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Copy-Item target/release/courier.exe dist/Courier.exe
+          Get-Item dist/Courier.exe | Select-Object Name, Length
+      - uses: actions/upload-artifact@v7
+        with:
+          name: courier-windows-x86_64
+          path: dist/Courier.exe

@@ -1,0 +1,102 @@
+name: Release
+
+# Push a tag like v0.1.0 to build installers and publish a GitHub release.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  linux:
+    name: Ubuntu .deb
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install system packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config \
+            libxkbcommon-dev libwayland-dev libx11-dev libxcursor-dev libxrandr-dev libxi-dev \
+            libgl1-mesa-dev libegl1-mesa-dev
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo install cargo-bundle --locked
+      - run: ./scripts/build-deb.sh
+      # Also publish under a fixed name so download links survive new versions.
+      - name: Add a version-free copy
+        run: cp target/release/bundle/deb/courier_*_amd64.deb target/release/bundle/deb/courier_amd64.deb
+      - uses: actions/upload-artifact@v7
+        with:
+          name: linux
+          path: target/release/bundle/deb/*.deb
+
+  macos:
+    name: macOS ${{ matrix.arch }}
+    runs-on: macos-15
+    strategy:
+      matrix:
+        include:
+          - arch: arm64
+            target: aarch64-apple-darwin
+          - arch: x86_64
+            target: x86_64-apple-darwin
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+      - run: cargo install cargo-bundle --locked
+      - name: Build Courier.app and DMG
+        run: |
+          cargo bundle --release --target ${{ matrix.target }} --format osx
+          app=target/${{ matrix.target }}/release/bundle/osx/Courier.app
+          codesign --force --deep -s - "$app"
+          mkdir -p dmg && cp -R "$app" dmg/ && ln -s /Applications dmg/Applications
+          hdiutil create -volname Courier -srcfolder dmg -ov -format UDZO Courier-macos-${{ matrix.arch }}.dmg
+      - uses: actions/upload-artifact@v7
+        with:
+          name: macos-${{ matrix.arch }}
+          path: Courier-macos-${{ matrix.arch }}.dmg
+
+  windows:
+    name: Windows .exe
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build Courier.exe
+        run: cargo build --release --locked
+      - name: Package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Copy-Item target/release/courier.exe dist/Courier-windows-x86_64.exe
+      - uses: actions/upload-artifact@v7
+        with:
+          name: windows
+          path: dist/Courier-windows-x86_64.exe
+
+  publish:
+    name: Publish release
+    needs: [linux, macos, windows]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: dist
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v3
+        with:
+          files: dist/*
+          generate_release_notes: true

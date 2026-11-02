@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Courier
+GenericName=API Client
+Comment=Build, send, script and test HTTP requests
+Exec=@EXEC@ %U
+Icon=courier
+Terminal=false
+Categories=Development;Network;
+Keywords=api;http;rest;request;postman;curl;
+StartupNotify=true
+StartupWMClass=courier

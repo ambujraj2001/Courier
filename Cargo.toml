@@ -1,0 +1,103 @@
+[package]
+name = "courier"
+version = "0.1.0"
+edition = "2024"
+description = "A local-first desktop API client"
+license = "MIT"
+default-run = "courier"
+
+[lib]
+name = "courier"
+path = "src/lib.rs"
+
+[[bin]]
+name = "courier"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1.0.104"
+base64 = "0.22"
+bytes = "1.12.1"
+chrono = { version = "0.4.45", features = ["serde"] }
+csv = "1.4.0"
+directories = "6.0.0"
+eframe = { version = "0.31", default-features = false, features = ["accesskit", "default_fonts", "glow", "wayland", "x11"] }
+egui = "0.31"
+egui-phosphor = "0.9"
+egui_extras = { version = "0.31", features = ["image"] }
+futures-util = "0.3.34"
+hmac = "0.12"
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp", "ico"] }
+jsonwebtoken = "9"
+md-5 = "0.10"
+percent-encoding = "2.3.2"
+rand = "0.8"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "gzip", "brotli", "deflate", "multipart", "stream", "socks", "http2", "json"] }
+rfd = "0.15"
+rquickjs = "0.9"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = { version = "1.0.154", features = ["preserve_order"] }
+sha1 = "0.10"
+sha2 = "0.10"
+thiserror = "2.0.21"
+tokio = { version = "1.54.1", features = ["rt-multi-thread", "macros", "sync", "time", "fs", "net", "io-util"] }
+tokio-util = { version = "0.7.20", features = ["rt"] }
+url = "2.5.8"
+uuid = { version = "1.29.0", features = ["v4", "serde"] }
+
+[dev-dependencies]
+egui_kittest = { version = "0.31", features = ["wgpu", "snapshot"] }
+pretty_assertions = "1.4.1"
+tempfile = "3.27.0"
+wiremock = "0.6.5"
+
+[package.metadata.bundle]
+name = "Courier"
+identifier = "app.courier.desktop"
+icon = [
+    "assets/icon/icon_16x16.png",
+    "assets/icon/icon_32x32.png",
+    "assets/icon/icon_128x128.png",
+    "assets/icon/icon_256x256.png",
+    "assets/icon/icon_512x512.png",
+    "assets/icon/icon_512x512@2x.png",
+]
+version = "0.1.0"
+copyright = "Copyright © 2026 Courier contributors"
+category = "public.app-category.developer-tools"
+short_description = "A local-first desktop API client"
+long_description = "Build, send, script, test and run HTTP requests. Collections, environments and history are stored as local JSON files; no account or cloud."
+
+# Runtime libraries for the .deb (Ubuntu/Debian). Window, input and GL
+# libraries are loaded at runtime; xdg-utils opens the browser for OAuth and
+# xdg-desktop-portal provides the native file dialogs.
+deb_depends = [
+    "libc6",
+    "libgl1",
+    "libegl1",
+    "libxkbcommon0",
+    "libwayland-client0",
+    "libx11-6",
+    "libxcursor1",
+    "libxrandr2",
+    "libxi6",
+    "xdg-utils",
+    "xdg-desktop-portal",
+]
+
+[package.metadata.bundle.osx]
+minimum_system_version = "11.0"
+
+[package.metadata.bundle.linux]
+startup_wm_class = "courier"
+
+[profile.release]
+lto = "thin"
+strip = true
+
+[lints.clippy]
+field_reassign_with_default = "allow"
+large_enum_variant = "allow"
+
+[build-dependencies]
+winresource = "0.1"
