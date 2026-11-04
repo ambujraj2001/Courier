@@ -4,6 +4,12 @@ A local-first desktop API client for **macOS**, **Linux** (Ubuntu and other dist
 
 The layout will feel familiar if you have used Postman: collections on the left, request tabs across the top, and Params, Authorization, Headers, Body, Pre-request Script, Tests and Settings above the response. Courier starts in a light theme, and dark mode is one click away (the moon icon at the top right).
 
+### Watch the tour (1:24)
+
+[![Courier tour video: click to play](docs/video/courier-tour-poster.jpg)](https://github.com/ambujraj2001/Courier/blob/main/docs/video/courier-tour.mp4)
+
+An 84-second narrated walkthrough with captions: building and sending requests, environments, tests, the collection runner, import and dark mode. Click the image to play it, or [download the MP4](https://github.com/ambujraj2001/Courier/raw/main/docs/video/courier-tour.mp4) (13 MB).
+
 ![Courier request builder](docs/screenshots/request-light.png)
 
 | Body editor | Collection runner | Dark mode |

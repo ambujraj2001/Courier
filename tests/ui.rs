@@ -17,6 +17,10 @@ fn harness(dir: PathBuf) -> Harness<'static, Option<CourierApp>> {
     let mut builder = Harness::builder().with_size(egui::vec2(1360.0, 860.0));
     if std::env::var_os("COURIER_SNAPSHOT_DIR").is_some() {
         builder = builder.wgpu();
+        // COURIER_SNAPSHOT_SCALE=2 renders Retina-sharp images for docs and videos.
+        if let Some(scale) = std::env::var("COURIER_SNAPSHOT_SCALE").ok().and_then(|s| s.parse().ok()) {
+            builder = builder.with_pixels_per_point(scale);
+        }
     }
     builder.build_state(
         move |ctx, app: &mut Option<CourierApp>| {
@@ -123,6 +127,14 @@ fn send_request_and_show_response() {
     snapshot(&mut h, "02-response");
     h.get_by_label_contains("200 OK");
     h.get_by_label("Test Results (1/1)");
+    h.get_by_label("Test Results (1/1)").click();
+    let a = app(&mut h);
+    if let TabKind::Request(r) = &mut a.tabs[a.active_tab].kind {
+        r.section = courier::app::ReqSection::Tests;
+    }
+    h.step();
+    h.step();
+    snapshot(&mut h, "02b-tests");
 
     let a = app(&mut h);
     assert_eq!(a.history.entries.len(), 1);
