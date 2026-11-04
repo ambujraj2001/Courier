@@ -6,9 +6,9 @@ The layout will feel familiar if you have used Postman: collections on the left,
 
 ### Watch the tour (1:24)
 
-[![Courier tour video: click to play](docs/video/courier-tour-poster.jpg)](https://github.com/ambujraj2001/Courier/blob/main/docs/video/courier-tour.mp4)
+[![Courier tour video: click to play](docs/video/courier-tour-poster.jpg)](https://github.com/ambujraj2001/Courier/raw/main/docs/video/courier-tour.mp4)
 
-An 84-second narrated walkthrough with captions: building and sending requests, environments, tests, the collection runner, import and dark mode. Click the image to play it, or [download the MP4](https://github.com/ambujraj2001/Courier/raw/main/docs/video/courier-tour.mp4) (13 MB).
+An 84-second narrated walkthrough with captions: building and sending requests, environments, tests, the collection runner, import and dark mode. Click the image to get the MP4 (13 MB), then open it in any video player.
 
 ![Courier request builder](docs/screenshots/request-light.png)
 
