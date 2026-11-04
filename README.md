@@ -2,11 +2,13 @@
 
 A local-first desktop API client for **macOS**, **Linux** (Ubuntu and other distributions) and **Windows**, written in Rust with egui, reqwest and tokio. There are no accounts and no cloud; everything is stored as JSON on your machine. See [SPEC.md](SPEC.md) for the full specification.
 
-![Courier request builder](docs/screenshots/request-dark.png)
+The layout will feel familiar if you have used Postman: collections on the left, request tabs across the top, and Params, Authorization, Headers, Body, Pre-request Script, Tests and Settings above the response. Courier starts in a light theme, and dark mode is one click away (the moon icon at the top right).
 
-| Light theme | Collection runner |
-|---|---|
-| ![Body editor in the light theme](docs/screenshots/body-light.png) | ![Collection runner results](docs/screenshots/runner.png) |
+![Courier request builder](docs/screenshots/request-light.png)
+
+| Body editor | Collection runner | Dark mode |
+|---|---|---|
+| ![Body editor with raw JSON](docs/screenshots/body-light.png) | ![Collection runner results](docs/screenshots/runner.png) | ![Authorization and console in dark mode](docs/screenshots/dark.png) |
 
 ## Install
 
@@ -177,7 +179,7 @@ On Linux, install the build dependencies first, either with `./scripts/install-l
 - **Releases:** pushing a version tag runs [Release](.github/workflows/release.yml). It builds the `.deb`, both macOS DMGs and the Windows `.exe`, and publishes them as a GitHub release:
 
 ```bash
-git tag v0.1.0 && git push origin v0.1.0
+git tag v0.2.0 && git push origin v0.2.0
 ```
 
 The macOS builds are signed ad hoc. Notarized builds need an Apple Developer ID.

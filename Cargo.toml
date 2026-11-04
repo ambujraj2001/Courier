@@ -1,6 +1,6 @@
 [package]
 name = "courier"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 description = "A local-first desktop API client"
 license = "MIT"
@@ -62,7 +62,7 @@ icon = [
     "assets/icon/icon_512x512.png",
     "assets/icon/icon_512x512@2x.png",
 ]
-version = "0.1.0"
+version = "0.2.0"
 copyright = "Copyright © 2026 Courier contributors"
 category = "public.app-category.developer-tools"
 short_description = "A local-first desktop API client"

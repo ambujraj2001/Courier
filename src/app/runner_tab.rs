@@ -141,7 +141,7 @@ pub fn show(app: &mut CourierApp, ui: &mut Ui, tab_id: u64, tab: &mut RunnerTab)
             ui.add_enabled_ui(!running, |ui| config_panel(app, ui, tab_id, tab));
         });
     egui::CentralPanel::default()
-        .frame(egui::Frame::new().fill(p.canvas).inner_margin(egui::Margin { left: 16, right: 0, top: 0, bottom: 0 }))
+        .frame(egui::Frame::new().fill(p.canvas).inner_margin(egui::Margin { left: 16, right: 4, top: 0, bottom: 0 }))
         .show_inside(ui, |ui| results_panel(app, ui, tab_id, tab));
 }
 
@@ -452,7 +452,9 @@ fn results_panel(app: &mut CourierApp, ui: &mut Ui, tab_id: u64, tab: &mut Runne
     ui.add_space(12.0);
     let t = tab.result.totals.clone();
     ui.horizontal(|ui| {
-        let w = ((ui.available_width() - 4.0 * 8.0) / 5.0 - 28.0).max(60.0);
+        // Card content width: share minus spacing, inner margins and stroke.
+        let gap = ui.spacing().item_spacing.x;
+        let w = ((ui.available_width() - 4.0 * gap) / 5.0 - 30.0).max(60.0);
         ui.data_mut(|d| d.insert_temp(egui::Id::new("stat_w"), w));
         stat(ui, "Iterations", tab.result.iterations.len().to_string(), p.text);
         stat(ui, "Requests", t.requests.to_string(), p.text);

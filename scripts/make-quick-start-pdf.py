@@ -113,7 +113,7 @@ c.setFillColor(HexColor("#aeb6c2"))
 c.setFont("Body", 9.5)
 c.drawString(M + 74, H - 86, "A fast, local-first API client. No account, no cloud — your requests stay on your machine.")
 # Version pill.
-pill = "v0.1.0   ·   macOS   ·   Windows   ·   Linux"
+pill = "v0.2.0   ·   macOS   ·   Windows   ·   Linux"
 c.setFont("Body-Bold", 8)
 pw = c.stringWidth(pill, "Body-Bold", 8) + 22
 c.setFillColor(INK2)
@@ -127,7 +127,7 @@ top = H - HEADER_H - 18
 shot_w = 268
 shot_h = shot_w * 860 / 1360
 shot_x = W - M - shot_w
-shot = ImageReader(f"{ROOT}/docs/screenshots/request-dark.png")
+shot = ImageReader(f"{ROOT}/docs/screenshots/request-light.png")
 # Shadow + frame.
 c.setFillColor(HexColor("#d9dde3"))
 c.roundRect(shot_x + 2, top - shot_h - 3, shot_w, shot_h, 6, stroke=0, fill=1)
