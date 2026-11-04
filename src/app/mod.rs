@@ -164,6 +164,8 @@ pub struct CourierApp {
     pub sidebar: SidebarSection,
     pub sidebar_open: bool,
     pub sidebar_filter: String,
+    /// Text in the header's "search requests" box.
+    pub global_search: String,
     pub expanded: HashSet<String>,
     pub renaming: Option<(String, String)>,
     pub console: Vec<ConsoleLine>,
@@ -177,6 +179,7 @@ pub struct CourierApp {
     /// Focus requests from shortcuts, consumed by the widgets that own focus.
     pub focus_url: bool,
     pub focus_sidebar_search: bool,
+    pub focus_global_search: bool,
     tx: Sender<AppEvent>,
     rx: Receiver<AppEvent>,
     last_workspace: Vec<u8>,
@@ -190,8 +193,11 @@ impl CourierApp {
         let data = DataDir::open(&data_dir)
             .unwrap_or_else(|e| panic!("cannot open data directory {}: {e}", data_dir.display()));
         let mut issues = Vec::new();
-        let (settings, i) = data.load_doc::<Settings>(&data.settings_path());
+        let (mut settings, i) = data.load_doc::<Settings>(&data.settings_path());
         issues.extend(i);
+        if settings.migrate() {
+            let _ = data.save_doc(&data.settings_path(), &settings);
+        }
         let (collections, i) = data.load_collections();
         issues.extend(i);
         let (environments, i) = data.load_environments();
@@ -239,6 +245,7 @@ impl CourierApp {
             sidebar: workspace.sidebar,
             sidebar_open: true,
             sidebar_filter: String::new(),
+            global_search: String::new(),
             expanded: workspace.expanded.iter().cloned().collect(),
             renaming: None,
             console: Vec::new(),
@@ -250,6 +257,7 @@ impl CourierApp {
             deferred: Vec::new(),
             focus_url: false,
             focus_sidebar_search: false,
+            focus_global_search: false,
             tx,
             rx,
             last_workspace: Vec::new(),
@@ -1277,14 +1285,19 @@ impl CourierApp {
         self.handle_dropped_files(ctx);
         let p = theme::palette_for(ctx.style().visuals.dark_mode);
 
+        egui::TopBottomPanel::top("app_header")
+            .exact_height(44.0)
+            .show_separator_line(true)
+            .frame(egui::Frame::new().fill(p.chrome).inner_margin(egui::Margin::symmetric(12, 0)))
+            .show(ctx, |ui| self.app_header(ui));
         egui::SidePanel::left("rail")
             .exact_width(64.0)
             .resizable(false)
             .show_separator_line(true)
-            .frame(egui::Frame::new().fill(p.chrome).inner_margin(egui::Margin::symmetric(8, 10)))
+            .frame(egui::Frame::new().fill(p.chrome).inner_margin(egui::Margin::symmetric(8, 8)))
             .show(ctx, |ui| self.rail(ui));
         egui::TopBottomPanel::bottom("status_bar")
-            .exact_height(30.0)
+            .exact_height(28.0)
             .frame(egui::Frame::new().fill(p.chrome).inner_margin(egui::Margin::symmetric(10, 2)))
             .show(ctx, |ui| self.status_bar(ui));
         if self.console_open {
@@ -1300,11 +1313,11 @@ impl CourierApp {
                 .resizable(true)
                 .default_width(300.0)
                 .width_range(220.0..=600.0)
-                .frame(egui::Frame::new().fill(p.chrome).inner_margin(egui::Margin {
-                    left: 12,
-                    right: 10,
-                    top: 12,
-                    bottom: 8,
+                .frame(egui::Frame::new().fill(p.canvas).inner_margin(egui::Margin {
+                    left: 10,
+                    right: 8,
+                    top: 10,
+                    bottom: 6,
                 }))
                 .show(ctx, |ui| sidebar::show(self, ui));
         }
@@ -1388,6 +1401,9 @@ impl CourierApp {
         if pressed(KeyboardShortcut::new(cmd, Key::Comma)) {
             self.dialog = Some(Dialog::Settings(dialogs::SettingsDialog::new(&self.settings)));
         }
+        if pressed(KeyboardShortcut::new(cmd, Key::K)) {
+            self.focus_global_search = true;
+        }
         if pressed(KeyboardShortcut::new(cmd, Key::L)) {
             self.focus_url = true;
         }
@@ -1439,25 +1455,11 @@ impl CourierApp {
 
     /// Vertical navigation rail with the Courier mark and section switches.
     fn rail(&mut self, ui: &mut egui::Ui) {
-        let p = theme::palette(ui);
         ui.vertical_centered(|ui| {
-            // Brand mark.
-            let (rect, resp) = ui.allocate_exact_size(egui::vec2(34.0, 34.0), egui::Sense::click());
-            ui.painter().rect_filled(rect, 10.0, p.accent);
-            ui.painter().text(
-                rect.center(),
-                egui::Align2::CENTER_CENTER,
-                kit::icon::PAPER_PLANE_TILT,
-                egui::FontId::proportional(19.0),
-                p.on_accent,
-            );
-            if resp.on_hover_text("Courier").clicked() {
-                self.sidebar_open = !self.sidebar_open;
-            }
-            ui.add_space(16.0);
+            ui.add_space(2.0);
             for (section, glyph, label) in [
                 (SidebarSection::Collections, kit::icon::STACK, "Collections"),
-                (SidebarSection::Environments, kit::icon::GLOBE, "Envs"),
+                (SidebarSection::Environments, kit::icon::GLOBE, "Environments"),
                 (SidebarSection::History, kit::icon::CLOCK_COUNTER_CLOCKWISE, "History"),
             ] {
                 let selected = self.sidebar_open && self.sidebar == section;
@@ -1469,22 +1471,120 @@ impl CourierApp {
                         self.sidebar_open = true;
                     }
                 }
-                ui.add_space(4.0);
+                ui.add_space(2.0);
             }
         });
-        ui.with_layout(egui::Layout::bottom_up(egui::Align::Center), |ui| {
-            if rail_item(ui, kit::icon::GEAR, "Settings", false).clicked() {
-                self.dialog = Some(Dialog::Settings(dialogs::SettingsDialog::new(&self.settings)));
+    }
+
+    /// Full-width bar at the top: brand and workspace on the left, request
+    /// search in the middle, settings on the right.
+    fn app_header(&mut self, ui: &mut egui::Ui) {
+        let p = theme::palette(ui);
+        let full = ui.max_rect();
+        ui.horizontal_centered(|ui| {
+            let (rect, resp) = ui.allocate_exact_size(egui::vec2(24.0, 24.0), egui::Sense::click());
+            ui.painter().rect_filled(rect, 6.0, p.accent);
+            ui.painter().text(
+                rect.center(),
+                egui::Align2::CENTER_CENTER,
+                kit::icon::PAPER_PLANE_TILT,
+                egui::FontId::proportional(14.0),
+                p.on_accent,
+            );
+            if resp.on_hover_text("Toggle sidebar").clicked() {
+                self.sidebar_open = !self.sidebar_open;
             }
-            ui.add_space(4.0);
-            let dark = ui.visuals().dark_mode;
-            let (glyph, tip) = if dark { (kit::icon::SUN, "Light") } else { (kit::icon::MOON, "Dark") };
-            if rail_item(ui, glyph, tip, false).clicked() {
-                self.settings.theme = if dark { crate::settings::Theme::Light } else { crate::settings::Theme::Dark };
-                theme::apply(&self.egui_ctx, self.settings.theme);
-                self.persist_settings();
-            }
+            ui.label(egui::RichText::new("Courier").size(14.0).strong().color(p.text));
+            ui.add_space(10.0);
+            ui.label(egui::RichText::new(format!("{}  Local workspace", kit::icon::HARD_DRIVES)).color(p.text_muted))
+                .on_hover_text(format!("Everything is stored in {}", self.data.root.display()));
         });
+        // Centered search over every collection's requests.
+        let search_w = 380.0_f32.min(full.width() * 0.34);
+        let search_rect = egui::Rect::from_center_size(full.center(), egui::vec2(search_w, 30.0));
+        let r = ui.allocate_new_ui(egui::UiBuilder::new().max_rect(search_rect), |ui| {
+            kit::search_field(ui, &mut self.global_search, &platform::keys("Search requests  (⌘K)"), search_w)
+        });
+        let search = r.inner;
+        if self.focus_global_search {
+            search.request_focus();
+            self.focus_global_search = false;
+        }
+        self.global_search_results(ui, &search);
+        let right = egui::Rect::from_min_max(egui::pos2(full.right() - 160.0, full.top()), full.max);
+        ui.allocate_new_ui(
+            egui::UiBuilder::new().max_rect(right).layout(egui::Layout::right_to_left(egui::Align::Center)),
+            |ui| {
+                ui.spacing_mut().item_spacing.x = 2.0;
+                if kit::icon_button(ui, kit::icon::GEAR, &platform::keys("Settings (⌘,)")).clicked() {
+                    self.dialog = Some(Dialog::Settings(dialogs::SettingsDialog::new(&self.settings)));
+                }
+                let dark = ui.visuals().dark_mode;
+                let (glyph, tip) = if dark {
+                    (kit::icon::SUN, "Switch to light theme")
+                } else {
+                    (kit::icon::MOON, "Switch to dark theme")
+                };
+                if kit::icon_button(ui, glyph, tip).clicked() {
+                    self.settings.theme =
+                        if dark { crate::settings::Theme::Light } else { crate::settings::Theme::Dark };
+                    theme::apply(&self.egui_ctx, self.settings.theme);
+                    self.persist_settings();
+                }
+                if kit::icon_button(ui, kit::icon::KEYBOARD, &platform::keys("Keyboard shortcuts (⌘/)")).clicked() {
+                    self.dialog = Some(Dialog::Shortcuts);
+                }
+            },
+        );
+    }
+
+    /// Drop-down of requests matching the header search.
+    fn global_search_results(&mut self, ui: &mut egui::Ui, field: &egui::Response) {
+        let query = self.global_search.trim().to_lowercase();
+        if query.is_empty()
+            || !field.has_focus() && !ui.memory(|m| m.is_popup_open(egui::Id::new("global_search_popup")))
+        {
+            return;
+        }
+        let mut hits: Vec<(String, String, String, String, String)> = Vec::new();
+        for c in &self.collections {
+            for r in c.requests() {
+                if r.name.to_lowercase().contains(&query) || r.request.url.to_lowercase().contains(&query) {
+                    hits.push((c.id.clone(), r.id.clone(), r.request.method.clone(), r.name.clone(), c.name.clone()));
+                }
+            }
+        }
+        let p = theme::palette(ui);
+        let mut open = None;
+        let pos = field.rect.left_bottom() + egui::vec2(0.0, 4.0);
+        egui::Area::new(egui::Id::new("global_search_area")).order(egui::Order::Foreground).fixed_pos(pos).show(
+            ui.ctx(),
+            |ui| {
+                egui::Frame::popup(ui.style()).show(ui, |ui| {
+                    ui.set_width(field.rect.width() - 12.0);
+                    if hits.is_empty() {
+                        ui.label(egui::RichText::new("No requests match").color(p.text_faint));
+                    }
+                    for (cid, rid, method, name, coll) in hits.iter().take(12) {
+                        let (resp, _) = kit::row(ui, egui::Id::new(("hit", rid)), false, 28.0, |ui| {
+                            kit::method_tag(ui, method, 36.0);
+                            ui.label(name);
+                            ui.label(egui::RichText::new(coll).color(p.text_faint).size(11.5));
+                        });
+                        if resp.clicked() {
+                            open = Some((cid.clone(), rid.clone()));
+                        }
+                    }
+                });
+            },
+        );
+        if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+            self.global_search.clear();
+        }
+        if let Some((c, r)) = open {
+            self.open_request(&c, &r);
+            self.global_search.clear();
+        }
     }
 
     fn header_bar(&mut self, ui: &mut egui::Ui) {
@@ -1609,12 +1709,19 @@ impl CourierApp {
         });
     }
 
+    /// Bottom bar: local status and console on the left; runner, cookies
+    /// and layout switches on the right.
     fn status_bar(&mut self, ui: &mut egui::Ui) {
         let p = theme::palette(ui);
         ui.horizontal_centered(|ui| {
             ui.spacing_mut().item_spacing.x = 2.0;
+            let (dot, _) = ui.allocate_exact_size(egui::vec2(14.0, 14.0), egui::Sense::hover());
+            ui.painter().circle_filled(dot.center(), 3.5, p.success);
+            ui.label(egui::RichText::new("Local").size(11.5).color(p.text_muted))
+                .on_hover_text(format!("No account or cloud. Everything is stored in {}", self.data.root.display()));
+            ui.add_space(8.0);
             let errors = self.console.iter().filter(|l| l.level == ConsoleLevel::Error).count();
-            let label = if errors > 0 { format!("Console · {errors}") } else { "Console".into() };
+            let label = if errors > 0 { format!("Console ({errors})") } else { "Console".into() };
             let kind = if self.console_open { kit::Kind::Secondary } else { kit::Kind::Ghost };
             if kit::small_button(ui, kind, Some(kit::icon::TERMINAL_WINDOW), &label)
                 .on_hover_text(platform::keys("⌥⌘C"))
@@ -1622,46 +1729,37 @@ impl CourierApp {
             {
                 self.console_open = !self.console_open;
             }
-            if kit::small_button(ui, kit::Kind::Ghost, Some(kit::icon::COOKIE), "Cookies").clicked() {
-                self.dialog = Some(Dialog::Cookies(dialogs::CookieDialog::default()));
-            }
-            if kit::small_button(ui, kit::Kind::Ghost, Some(kit::icon::PLAY), "Runner")
-                .on_hover_text(platform::keys("⇧⌘R"))
-                .clicked()
-            {
-                match self.collections.first() {
-                    Some(c) => {
-                        let id = c.id.clone();
-                        self.open_runner(&id, None);
-                    }
-                    None => self.toast_error("Create or import a collection to run it"),
-                }
-            }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 ui.spacing_mut().item_spacing.x = 2.0;
-                if kit::icon_button(ui, kit::icon::KEYBOARD, &platform::keys("Keyboard shortcuts (⌘/)")).clicked() {
-                    self.dialog = Some(Dialog::Shortcuts);
-                }
                 let side = self.settings.layout == crate::settings::Layout::SideBySide;
-                if kit::icon_toggle(ui, kit::icon::COLUMNS, side, 26.0, &platform::keys("Side by side (⌥⌘V)")).clicked()
+                if kit::icon_toggle(ui, kit::icon::COLUMNS, side, 24.0, &platform::keys("Side by side (⌥⌘V)")).clicked()
                     && !side
                 {
                     self.settings.layout = crate::settings::Layout::SideBySide;
                     self.persist_settings();
                 }
-                if kit::icon_toggle(ui, kit::icon::ROWS, !side, 26.0, &platform::keys("Stacked (⌥⌘V)")).clicked()
+                if kit::icon_toggle(ui, kit::icon::ROWS, !side, 24.0, &platform::keys("Stacked (⌥⌘V)")).clicked()
                     && side
                 {
                     self.settings.layout = crate::settings::Layout::Stacked;
                     self.persist_settings();
                 }
-                ui.add_space(8.0);
-                ui.label(
-                    egui::RichText::new(format!("{}  Local only", kit::icon::HARD_DRIVES))
-                        .text_style(theme::caption_style())
-                        .color(p.text_faint),
-                )
-                .on_hover_text(format!("Everything is stored in {}", self.data.root.display()));
+                ui.add_space(6.0);
+                if kit::small_button(ui, kit::Kind::Ghost, Some(kit::icon::COOKIE), "Cookies").clicked() {
+                    self.dialog = Some(Dialog::Cookies(dialogs::CookieDialog::default()));
+                }
+                if kit::small_button(ui, kit::Kind::Ghost, Some(kit::icon::PLAY), "Runner")
+                    .on_hover_text(platform::keys("⇧⌘R"))
+                    .clicked()
+                {
+                    match self.collections.first() {
+                        Some(c) => {
+                            let id = c.id.clone();
+                            self.open_runner(&id, None);
+                        }
+                        None => self.toast_error("Create or import a collection to run it"),
+                    }
+                }
             });
         });
     }

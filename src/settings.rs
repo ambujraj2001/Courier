@@ -5,8 +5,8 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum Theme {
-    #[default]
     System,
+    #[default]
     Light,
     Dark,
 }
@@ -88,7 +88,13 @@ pub struct Settings {
     pub ca_cert_enabled: bool,
     pub ca_cert_path: String,
     pub client_certs: Vec<ClientCert>,
+    /// Bumped when the default look changes; files without it predate 0.2.
+    #[serde(default)]
+    pub appearance_version: u32,
 }
+
+/// Version of the default appearance; 2 made the light theme the default.
+pub const APPEARANCE_VERSION: u32 = 2;
 
 impl Default for Settings {
     fn default() -> Self {
@@ -104,7 +110,7 @@ impl Default for Settings {
             allow_files_outside_working_dir: true,
             history_limit: 1000,
             script_timeout_ms: 10_000,
-            theme: Theme::System,
+            theme: Theme::Light,
             ui_zoom: 1.0,
             editor_font_size: 13.0,
             line_wrap: false,
@@ -113,11 +119,26 @@ impl Default for Settings {
             ca_cert_enabled: false,
             ca_cert_path: String::new(),
             client_certs: Vec::new(),
+            appearance_version: APPEARANCE_VERSION,
         }
     }
 }
 
 impl Settings {
+    /// Move settings saved by older versions onto the current defaults.
+    /// Returns true when something changed.
+    pub fn migrate(&mut self) -> bool {
+        if self.appearance_version >= APPEARANCE_VERSION {
+            return false;
+        }
+        // The old default was "follow the system"; only that is reset.
+        if self.theme == Theme::System {
+            self.theme = Theme::Light;
+        }
+        self.appearance_version = APPEARANCE_VERSION;
+        true
+    }
+
     pub fn response_font_size(&self) -> f32 {
         self.editor_font_size
     }
@@ -130,6 +151,21 @@ impl Settings {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn old_system_theme_moves_to_light_once() {
+        let mut s: Settings = serde_json::from_str(r#"{"theme": "system"}"#).unwrap();
+        assert!(s.migrate());
+        assert_eq!(s.theme, Theme::Light);
+        s.theme = Theme::System;
+        assert!(!s.migrate());
+        assert_eq!(s.theme, Theme::System);
+
+        let mut dark: Settings = serde_json::from_str(r#"{"theme": "dark"}"#).unwrap();
+        dark.migrate();
+        assert_eq!(dark.theme, Theme::Dark);
+        assert!(!Settings::default().migrate());
+    }
 
     #[test]
     fn missing_fields_take_defaults() {

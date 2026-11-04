@@ -33,62 +33,70 @@ enum Action {
     Toggle(String),
 }
 
-const ROW_H: f32 = 28.0;
+const ROW_H: f32 = 26.0;
 const INDENT: f32 = 14.0;
 
 pub fn show(app: &mut CourierApp, ui: &mut Ui) {
     let p = theme::palette(ui);
-    let title = match app.sidebar {
-        SidebarSection::Collections => "Collections",
-        SidebarSection::Environments => "Environments",
-        SidebarSection::History => "History",
-    };
     let mut actions = Vec::new();
+    // Workspace row: name on the left, New / Import on the right.
     ui.horizontal(|ui| {
-        ui.label(RichText::new(title).size(15.0).strong().color(p.text));
+        ui.label(RichText::new("Local workspace").size(13.0).strong().color(p.text));
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            ui.spacing_mut().item_spacing.x = 2.0;
-            match app.sidebar {
-                SidebarSection::Collections => {
-                    if kit::icon_button(ui, icon::TRAY_ARROW_DOWN, &super::platform::keys("Import (⌘O)")).clicked() {
-                        actions.push(Action::Import);
-                    }
-                    if kit::icon_button(ui, icon::PLUS, "New collection").clicked() {
-                        actions.push(Action::NewCollection);
-                    }
-                }
-                SidebarSection::Environments => {
-                    if kit::icon_button(ui, icon::TRAY_ARROW_DOWN, "Import environment").clicked() {
-                        actions.push(Action::Import);
-                    }
-                    if kit::icon_button(ui, icon::PLUS, "New environment").clicked() {
-                        let id = app.create_environment("New Environment");
-                        app.open_environment(Some(&id));
-                    }
-                }
-                SidebarSection::History => {
-                    if kit::icon_button(ui, icon::TRASH, "Clear history").clicked() && !app.history.entries.is_empty() {
-                        app.dialog = Some(Dialog::Confirm {
-                            title: "Clear history".into(),
-                            message: "Delete all history entries? This cannot be undone.".into(),
-                            action: ConfirmAction::ClearHistory,
-                        });
-                    }
-                }
+            ui.spacing_mut().item_spacing.x = 4.0;
+            if kit::small_button(ui, kit::Kind::Secondary, None, "Import")
+                .on_hover_text(super::platform::keys("Import (⌘O)"))
+                .clicked()
+            {
+                actions.push(Action::Import);
+            }
+            if kit::small_button(ui, kit::Kind::Secondary, None, "New")
+                .on_hover_text(super::platform::keys("New (⌘N)"))
+                .clicked()
+            {
+                app.dialog = Some(Dialog::NewItem);
             }
         });
     });
-    ui.add_space(8.0);
+    ui.add_space(6.0);
+    kit::divider(ui);
+    ui.add_space(6.0);
+    // Filter row: section action, then the filter field.
     let hint = match app.sidebar {
-        SidebarSection::Collections => "Search requests",
-        SidebarSection::Environments => "Search environments",
-        SidebarSection::History => "Search history",
+        SidebarSection::Collections => "Filter collections",
+        SidebarSection::Environments => "Filter environments",
+        SidebarSection::History => "Filter history",
     };
-    let r = kit::search_field(ui, &mut app.sidebar_filter, hint, f32::INFINITY);
-    if std::mem::take(&mut app.focus_sidebar_search) {
-        r.request_focus();
-    }
-    ui.add_space(10.0);
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 4.0;
+        match app.sidebar {
+            SidebarSection::Collections => {
+                if kit::icon_button(ui, icon::PLUS, "New collection").clicked() {
+                    actions.push(Action::NewCollection);
+                }
+            }
+            SidebarSection::Environments => {
+                if kit::icon_button(ui, icon::PLUS, "New environment").clicked() {
+                    let id = app.create_environment("New Environment");
+                    app.open_environment(Some(&id));
+                }
+            }
+            SidebarSection::History => {
+                if kit::icon_button(ui, icon::TRASH, "Clear history").clicked() && !app.history.entries.is_empty() {
+                    app.dialog = Some(Dialog::Confirm {
+                        title: "Clear history".into(),
+                        message: "Delete all history entries? This cannot be undone.".into(),
+                        action: ConfirmAction::ClearHistory,
+                    });
+                }
+            }
+        }
+        let r = kit::search_field(ui, &mut app.sidebar_filter, hint, f32::INFINITY);
+        if std::mem::take(&mut app.focus_sidebar_search) {
+            r.request_focus();
+        }
+    });
+    ui.add_space(6.0);
     match app.sidebar {
         SidebarSection::Collections => collections(app, ui, &mut actions),
         SidebarSection::Environments => environments(app, ui),

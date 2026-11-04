@@ -37,52 +37,60 @@ pub struct Palette {
     pub warning: Color32,
     pub danger: Color32,
     pub info: Color32,
+    /// The Send button.
+    pub send: Color32,
+    pub send_hover: Color32,
 }
 
 pub const DARK: Palette = Palette {
     dark: true,
-    chrome: rgb(0x0b0d10),
-    canvas: rgb(0x111317),
-    surface: rgb(0x181b20),
-    surface_hover: rgb(0x1f2329),
-    surface_active: rgb(0x262b32),
-    input: rgb(0x0d0f12),
-    border: rgb(0x23272e),
-    border_strong: rgb(0x31363f),
-    text: rgb(0xe8eaed),
-    text_muted: rgb(0x949ba7),
-    text_faint: rgb(0x5f6672),
+    chrome: rgb(0x1c1c1c),
+    canvas: rgb(0x212121),
+    surface: rgb(0x262626),
+    surface_hover: rgb(0x2e2e2e),
+    surface_active: rgb(0x383838),
+    input: rgb(0x1a1a1a),
+    border: rgb(0x333333),
+    border_strong: rgb(0x454545),
+    text: rgb(0xe6e6e6),
+    text_muted: rgb(0xa6a6a6),
+    text_faint: rgb(0x6b6b6b),
     accent: rgb(0x2dd4bf),
     accent_hover: rgb(0x5eead4),
     on_accent: rgb(0x032421),
-    accent_soft: Color32::from_rgba_premultiplied(0x08, 0x2b, 0x28, 0xff),
+    accent_soft: Color32::from_rgba_premultiplied(0x0c, 0x33, 0x30, 0xff),
     success: rgb(0x4ade80),
     warning: rgb(0xfbbf24),
     danger: rgb(0xf87171),
     info: rgb(0x60a5fa),
+    send: rgb(0x2f74e8),
+    send_hover: rgb(0x4a89f0),
 };
 
+/// Light theme: white work area on soft gray chrome, like most API clients.
 pub const LIGHT: Palette = Palette {
     dark: false,
-    chrome: rgb(0xf3f4f6),
+    chrome: rgb(0xf9f9f9),
     canvas: rgb(0xffffff),
     surface: rgb(0xffffff),
-    surface_hover: rgb(0xf1f3f5),
-    surface_active: rgb(0xe7eaee),
-    input: rgb(0xf8f9fb),
-    border: rgb(0xe3e6ea),
-    border_strong: rgb(0xd0d5dc),
-    text: rgb(0x111827),
-    text_muted: rgb(0x5b6472),
-    text_faint: rgb(0x9aa2ae),
+    surface_hover: rgb(0xf2f2f2),
+    surface_active: rgb(0xe6e6e6),
+    input: rgb(0xffffff),
+    border: rgb(0xe6e6e6),
+    border_strong: rgb(0xd1d1d1),
+    text: rgb(0x212121),
+    text_muted: rgb(0x6b6b6b),
+    text_faint: rgb(0xa6a6a6),
     accent: rgb(0x0d9488),
     accent_hover: rgb(0x0f766e),
     on_accent: rgb(0xffffff),
-    accent_soft: rgb(0xe6f6f4),
-    success: rgb(0x16a34a),
-    warning: rgb(0xd97706),
-    danger: rgb(0xdc2626),
+    accent_soft: rgb(0xe8f6f4),
+    success: rgb(0x0f8a47),
+    warning: rgb(0xb45f06),
+    danger: rgb(0xd0342c),
     info: rgb(0x2563eb),
+    send: rgb(0x1d6fe0),
+    send_hover: rgb(0x1659b8),
 };
 
 pub fn palette_for(dark: bool) -> Palette {
@@ -154,7 +162,7 @@ pub fn caption_style() -> TextStyle {
 
 fn visuals(p: Palette) -> Visuals {
     let mut v = if p.dark { Visuals::dark() } else { Visuals::light() };
-    let r6 = CornerRadius::same(6);
+    let r6 = CornerRadius::same(4);
     v.override_text_color = None;
     v.panel_fill = p.canvas;
     v.window_fill = p.surface;
@@ -230,20 +238,20 @@ fn style(theme: egui::Theme) -> egui::Style {
     let p = palette_for(theme == egui::Theme::Dark);
     let mut style = egui::Style { visuals: visuals(p), ..Default::default() };
     style.text_styles = [
-        (TextStyle::Small, FontId::new(11.5, FontFamily::Proportional)),
-        (TextStyle::Body, FontId::new(13.5, FontFamily::Proportional)),
-        (TextStyle::Button, FontId::new(13.0, FontFamily::Proportional)),
-        (TextStyle::Monospace, FontId::new(12.5, FontFamily::Monospace)),
-        (TextStyle::Heading, FontId::new(17.0, FontFamily::Proportional)),
-        (title_style(), FontId::new(20.0, FontFamily::Proportional)),
+        (TextStyle::Small, FontId::new(11.0, FontFamily::Proportional)),
+        (TextStyle::Body, FontId::new(12.5, FontFamily::Proportional)),
+        (TextStyle::Button, FontId::new(12.5, FontFamily::Proportional)),
+        (TextStyle::Monospace, FontId::new(12.0, FontFamily::Monospace)),
+        (TextStyle::Heading, FontId::new(15.0, FontFamily::Proportional)),
+        (title_style(), FontId::new(15.0, FontFamily::Proportional)),
         (caption_style(), FontId::new(10.5, FontFamily::Proportional)),
     ]
     .into();
     let s = &mut style.spacing;
-    s.item_spacing = egui::vec2(8.0, 6.0);
-    s.button_padding = egui::vec2(10.0, 5.0);
-    s.interact_size = egui::vec2(36.0, 26.0);
-    s.indent = 14.0;
+    s.item_spacing = egui::vec2(6.0, 4.0);
+    s.button_padding = egui::vec2(8.0, 4.0);
+    s.interact_size = egui::vec2(32.0, 24.0);
+    s.indent = 12.0;
     s.window_margin = Margin::same(18);
     s.menu_margin = Margin::same(6);
     s.combo_width = 120.0;

@@ -19,7 +19,8 @@ pub enum ReqSection {
     Auth,
     Headers,
     Body,
-    Scripts,
+    PreRequest,
+    Tests,
     Settings,
 }
 
@@ -208,8 +209,8 @@ fn header(app: &mut CourierApp, ui: &mut Ui, idx: usize, tab: &mut RequestTab) {
 fn url_bar(app: &mut CourierApp, ui: &mut Ui, idx: usize, tab: &mut RequestTab, vars: &crate::vars::VarContext) {
     let p = theme::palette(ui);
     let loading = matches!(tab.resp, RespState::Loading { .. });
-    let height = 40.0;
-    let send_w = 112.0;
+    let height = 36.0;
+    let send_w = 104.0;
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 8.0;
         let bar_w = ui.available_width() - send_w - 8.0;
@@ -218,7 +219,7 @@ fn url_bar(app: &mut CourierApp, ui: &mut Ui, idx: usize, tab: &mut RequestTab, 
         let focused = ui.memory(|m| m.focused()).is_some_and(|f| f == url_id || ui.memory(|m| m.has_focus(url_id)));
         ui.painter().rect(
             bar,
-            9.0,
+            4.0,
             p.input,
             egui::Stroke::new(1.0_f32, if focused { p.accent } else { p.border_strong }),
             egui::StrokeKind::Inside,
@@ -342,19 +343,20 @@ fn url_bar(app: &mut CourierApp, ui: &mut Ui, idx: usize, tab: &mut RequestTab, 
             (if mr.hovered() { p.surface_active } else { p.surface_hover }, "Cancel", icon::X, p.text)
         } else {
             (
-                if mr.hovered() || cr.hovered() { p.accent_hover } else { p.accent },
+                if mr.hovered() || cr.hovered() { p.send_hover } else { p.send },
                 "Send",
                 icon::PAPER_PLANE_TILT,
-                p.on_accent,
+                egui::Color32::WHITE,
             )
         };
-        ui.painter().rect_filled(send_rect, 9.0, fill);
+        ui.painter().rect_filled(send_rect, 4.0, fill);
         ui.painter().vline(
             caret.left(),
             (caret.top() + 10.0)..=(caret.bottom() - 10.0),
             egui::Stroke::new(1.0_f32, fg.gamma_multiply(0.35)),
         );
-        let g = ui.painter().layout_no_wrap(format!("{glyph}  {label}"), egui::FontId::proportional(13.5), fg);
+        let _ = glyph;
+        let g = ui.painter().layout_no_wrap(label.to_string(), egui::FontId::proportional(13.0), fg);
         ui.painter().galley(main.center() - g.size() / 2.0, g, fg);
         ui.painter().text(
             caret.center(),
@@ -395,31 +397,45 @@ fn request_editor(
     let count = |n: usize| (n > 0).then(|| n.to_string());
     let params = r.query.iter().filter(|q| q.enabled).count() + r.path_variables.len();
     let headers = r.headers.iter().filter(|h| h.enabled).count();
-    let has_scripts =
-        !tab.item.scripts.pre_request.trim().is_empty() || !tab.item.scripts.post_response.trim().is_empty();
+    let has_pre = !tab.item.scripts.pre_request.trim().is_empty();
+    let has_tests = !tab.item.scripts.post_response.trim().is_empty();
     let body_badge = (r.body.mode != BodyMode::None).then(|| "•".to_string());
     let auth_badge = (!matches!(r.auth.kind, AuthType::Inherit | AuthType::NoAuth)).then(|| "•".to_string());
-    let settings_badge = (!r.settings.is_empty()).then(|| r.settings.len().to_string());
-    kit::tabs(
-        ui,
-        &mut tab.section,
-        &[
-            (ReqSection::Params, "Params", count(params)),
-            (ReqSection::Auth, "Authorization", auth_badge),
-            (ReqSection::Headers, "Headers", count(headers)),
-            (ReqSection::Body, "Body", body_badge),
-            (ReqSection::Scripts, "Scripts", has_scripts.then(|| "•".to_string())),
-            (ReqSection::Settings, "Settings", settings_badge),
-        ],
-    );
-    ui.add_space(12.0);
+    let settings_badge = (!r.settings.is_empty()).then(|| "•".to_string());
+    let mut open_cookies = false;
+    ui.horizontal(|ui| {
+        kit::tabs(
+            ui,
+            &mut tab.section,
+            &[
+                (ReqSection::Params, "Params", count(params)),
+                (ReqSection::Auth, "Authorization", auth_badge),
+                (ReqSection::Headers, "Headers", count(headers)),
+                (ReqSection::Body, "Body", body_badge),
+                (ReqSection::PreRequest, "Pre-request Script", has_pre.then(|| "•".to_string())),
+                (ReqSection::Tests, "Tests", has_tests.then(|| "•".to_string())),
+                (ReqSection::Settings, "Settings", settings_badge),
+            ],
+        );
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            let link =
+                ui.add(egui::Label::new(RichText::new("Cookies").color(p.info).size(12.5)).sense(egui::Sense::click()));
+            if link.on_hover_cursor(egui::CursorIcon::PointingHand).clicked() {
+                open_cookies = true;
+            }
+        });
+    });
+    if open_cookies {
+        app.dialog = Some(Dialog::Cookies(dialogs::CookieDialog::default()));
+    }
+    ui.add_space(10.0);
     let font = app.settings.editor_font_size;
-    let fill_editor = matches!(tab.section, ReqSection::Scripts)
+    let fill_editor = matches!(tab.section, ReqSection::PreRequest | ReqSection::Tests)
         || (tab.section == ReqSection::Body && matches!(tab.item.request.body.mode, BodyMode::Raw | BodyMode::Graphql));
     if fill_editor {
         // Code editors fill the panel and scroll themselves.
         match tab.section {
-            ReqSection::Scripts => scripts_editor(ui, tab_id, tab, font),
+            ReqSection::PreRequest | ReqSection::Tests => scripts_editor(ui, tab_id, tab, font),
             _ => body_editor(app, ui, tab_id, tab, vars, font),
         }
         return;
@@ -568,7 +584,7 @@ fn request_editor(
                 );
             }
             ReqSection::Body => body_editor(app, ui, tab_id, tab, vars, font),
-            ReqSection::Scripts => {}
+            ReqSection::PreRequest | ReqSection::Tests => {}
             ReqSection::Settings => request_settings(ui, &mut tab.item.request),
         }
     });
@@ -576,14 +592,13 @@ fn request_editor(
 
 fn scripts_editor(ui: &mut Ui, tab_id: u64, tab: &mut RequestTab, font: f32) {
     let p = theme::palette(ui);
+    tab.post_script = tab.section == ReqSection::Tests;
     ui.horizontal(|ui| {
-        kit::segmented(ui, &mut tab.post_script, &[(false, "Pre-request"), (true, "Post-response")]);
-        ui.add_space(8.0);
         ui.label(
             RichText::new(if tab.post_script {
-                "Runs after the response arrives · pm.test(), pm.expect()"
+                "Runs after the response arrives. Write tests with pm.test() and pm.expect()."
             } else {
-                "Runs before sending · collection and folder scripts run first"
+                "Runs before the request is sent. Collection and folder scripts run first."
             })
             .color(p.text_faint)
             .size(12.0),
@@ -636,20 +651,21 @@ fn body_editor(
     let p = theme::palette(ui);
     let body = &mut tab.item.request.body;
     ui.horizontal(|ui| {
-        kit::segmented(
-            ui,
-            &mut body.mode,
-            &[
-                (BodyMode::None, "None"),
-                (BodyMode::Formdata, "Form data"),
-                (BodyMode::Urlencoded, "URL encoded"),
-                (BodyMode::Raw, "Raw"),
-                (BodyMode::File, "Binary"),
-                (BodyMode::Graphql, "GraphQL"),
-            ],
-        );
+        ui.spacing_mut().item_spacing.x = 4.0;
+        for (mode, label) in [
+            (BodyMode::None, "none"),
+            (BodyMode::Formdata, "form-data"),
+            (BodyMode::Urlencoded, "x-www-form-urlencoded"),
+            (BodyMode::Raw, "raw"),
+            (BodyMode::File, "binary"),
+            (BodyMode::Graphql, "GraphQL"),
+        ] {
+            if kit::radio(ui, body.mode == mode, label).clicked() {
+                body.mode = mode;
+            }
+        }
         if body.mode == BodyMode::Raw {
-            ui.add_space(6.0);
+            ui.add_space(4.0);
             let mut picked = None;
             kit::dropdown(
                 ui,
@@ -657,7 +673,7 @@ fn body_editor(
                 Some((icon::BRACKETS_CURLY, p.text_muted)),
                 body.raw_language.label(),
                 None,
-                130.0,
+                110.0,
                 |ui| {
                     for l in RawLanguage::ALL {
                         if kit::menu_item(ui, body.raw_language == l, l.label()).clicked() {
@@ -671,7 +687,11 @@ fn body_editor(
             }
             if body.raw_language == RawLanguage::Json {
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if kit::small_button(ui, kit::Kind::Ghost, Some(icon::SPARKLE), "Beautify").clicked() {
+                    let beautify = ui.add(
+                        egui::Label::new(RichText::new("Beautify").color(p.info).size(12.5))
+                            .sense(egui::Sense::click()),
+                    );
+                    if beautify.on_hover_cursor(egui::CursorIcon::PointingHand).clicked() {
                         let stripped = crate::http::prepare::strip_json_comments(&body.raw);
                         match serde_json::from_str::<serde_json::Value>(&stripped) {
                             Ok(v) => body.raw = serde_json::to_string_pretty(&v).unwrap_or_default(),
@@ -892,12 +912,7 @@ fn response_view(app: &mut CourierApp, ui: &mut Ui, tab: &mut RequestTab) {
     let p = theme::palette(ui);
     match &tab.resp {
         RespState::Empty => {
-            kit::empty_state(
-                ui,
-                icon::PAPER_PLANE_TILT,
-                "Ready when you are",
-                "Enter a URL and send the request to see the response here.",
-            );
+            kit::empty_state(ui, icon::PAPER_PLANE_TILT, "Response", "Enter the URL and click Send to get a response");
             ui.vertical_centered(|ui| {
                 ui.add_space(8.0);
                 ui.horizontal(|ui| {
@@ -964,17 +979,14 @@ fn response_view(app: &mut CourierApp, ui: &mut Ui, tab: &mut RequestTab) {
                 (RespSection::Body, "Body", None),
                 (RespSection::Headers, "Headers", Some(res.headers.len().to_string())),
                 (RespSection::Cookies, "Cookies", (cookies > 0).then(|| cookies.to_string())),
-                (RespSection::Tests, "Tests", tests_badge),
+                (RespSection::Tests, "Test Results", tests_badge),
                 (RespSection::Request, "Request", None),
             ],
         );
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             ui.spacing_mut().item_spacing.x = 12.0;
-            let size = ui.label(
-                RichText::new(format!("{}  {}", icon::DATABASE, human_size(res.total_size())))
-                    .color(p.text_muted)
-                    .size(12.5),
-            );
+            let status_color = theme::status_color(res.status, p.dark);
+            let size = stat(ui, "Size:", &human_size(res.total_size()), status_color);
             size.on_hover_ui(|ui| {
                 ui.label(format!("Headers  {}", human_size(res.header_size)));
                 ui.label(format!("Body  {}", human_size(res.body_size)));
@@ -982,11 +994,7 @@ fn response_view(app: &mut CourierApp, ui: &mut Ui, tab: &mut RequestTab) {
                     ui.label(RichText::new("Body was truncated in memory (size limit).").color(p.warning));
                 }
             });
-            let time = ui.label(
-                RichText::new(format!("{}  {}", icon::TIMER, human_time(res.timings.total_ms)))
-                    .color(p.text_muted)
-                    .size(12.5),
-            );
+            let time = stat(ui, "Time:", &human_time(res.timings.total_ms), status_color);
             time.on_hover_ui(|ui| {
                 egui::Grid::new("timings").num_columns(2).spacing([24.0, 4.0]).show(ui, |ui| {
                     ui.label(RichText::new("Waiting (TTFB)").color(p.text_muted));
@@ -1001,7 +1009,7 @@ fn response_view(app: &mut CourierApp, ui: &mut Ui, tab: &mut RequestTab) {
                 });
             });
             let status = format!("{} {}", res.status, res.status_text);
-            kit::badge(ui, &status, theme::status_color(res.status, p.dark))
+            stat(ui, "Status:", status.trim(), status_color)
                 .on_hover_text(format!("{} · {}", res.http_version, res.final_url));
         });
     });
@@ -1183,12 +1191,22 @@ fn test_row(ui: &mut Ui, t: &crate::script::TestResult) {
     ui.add_space(6.0);
 }
 
+/// A "Key: value" pair in the response summary, value tinted by the status.
+fn stat(ui: &mut Ui, key: &str, value: &str, color: egui::Color32) -> egui::Response {
+    let p = theme::palette(ui);
+    let mut job = egui::text::LayoutJob::default();
+    let font = egui::FontId::proportional(12.5);
+    job.append(key, 0.0, egui::TextFormat::simple(font.clone(), p.text_muted));
+    job.append(value, 4.0, egui::TextFormat::simple(font, color));
+    ui.label(job)
+}
+
 fn body_view(app: &mut CourierApp, ui: &mut Ui, tab: &mut RequestTab, res: &crate::http::HttpResponse) {
     let p = theme::palette(ui);
     let lang = highlight::lang_for_content_type(res.content_type());
     let is_image = res.content_type().starts_with("image/");
     ui.horizontal(|ui| {
-        kit::segmented(
+        kit::pill_tabs(
             ui,
             &mut tab.body_view,
             &[(BodyView::Pretty, "Pretty"), (BodyView::Raw, "Raw"), (BodyView::Preview, "Preview")],

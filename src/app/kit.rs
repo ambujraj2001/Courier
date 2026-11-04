@@ -150,26 +150,30 @@ pub fn icon_toggle(ui: &mut Ui, glyph: &str, selected: bool, size: f32, tooltip:
 }
 
 /// Underlined section tabs. Each item is (value, label, optional count).
-/// Returns true when the selection changed.
+/// A count is shown as "(n)" after the label; "•" shows a small dot meaning
+/// "this tab has content". Returns true when the selection changed.
 pub fn tabs<T: PartialEq + Copy>(ui: &mut Ui, current: &mut T, items: &[(T, &str, Option<String>)]) -> bool {
     let p = theme::palette(ui);
     let mut changed = false;
     let border_idx = ui.painter().add(egui::Shape::Noop);
     let row = ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing.x = 2.0;
+        ui.spacing_mut().item_spacing.x = 0.0;
         for (value, label, badge) in items {
             let selected = *current == *value;
-            let font = FontId::proportional(13.0);
+            let font = FontId::proportional(12.5);
             let text_g = galley(ui, label, font.clone(), p.text);
-            // "•" means "has content": drawn as a small accent dot.
             let dot = badge.as_deref() == Some("•");
-            let badge_g = badge
-                .as_ref()
-                .filter(|_| !dot)
-                .map(|b| galley(ui, b, FontId::proportional(11.0), if selected { p.accent } else { p.text_muted }));
-            let badge_w = if dot { 10.0 } else { badge_g.as_ref().map_or(0.0, |g| g.size().x + 12.0) };
-            let width = text_g.size().x + 20.0 + badge_w;
-            let (rect, resp) = ui.allocate_exact_size(vec2(width, 34.0), Sense::click());
+            let count_g = badge.as_ref().filter(|_| !dot).map(|b| {
+                galley(
+                    ui,
+                    &format!("({b})"),
+                    FontId::proportional(12.0),
+                    if selected { p.accent } else { p.text_faint },
+                )
+            });
+            let extra_w = if dot { 9.0 } else { count_g.as_ref().map_or(0.0, |g| g.size().x + 4.0) };
+            let width = text_g.size().x + 22.0 + extra_w;
+            let (rect, resp) = ui.allocate_exact_size(vec2(width, 32.0), Sense::click());
             let a11y = match badge {
                 Some(b) => format!("{label} ({b})"),
                 None => label.to_string(),
@@ -177,27 +181,26 @@ pub fn tabs<T: PartialEq + Copy>(ui: &mut Ui, current: &mut T, items: &[(T, &str
             resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, selected, &a11y));
             let hovered = resp.hovered();
             let color = if selected || hovered { p.text } else { p.text_muted };
-            let ty = rect.center().y - text_g.size().y / 2.0 - 1.0;
-            ui.painter().galley(egui::pos2(rect.left() + 10.0, ty), text_g.clone(), color);
+            let x0 = rect.left() + 11.0;
+            let ty = rect.center().y - text_g.size().y / 2.0;
+            ui.painter().galley(egui::pos2(x0, ty), text_g.clone(), color);
             if dot {
                 ui.painter().circle_filled(
-                    egui::pos2(rect.left() + 10.0 + text_g.size().x + 7.0, rect.center().y - 1.0),
-                    3.0,
-                    p.accent,
+                    egui::pos2(x0 + text_g.size().x + 6.0, rect.center().y - 3.0),
+                    2.6,
+                    p.success,
                 );
             }
-            if let Some(g) = badge_g {
-                let bx = rect.left() + 10.0 + text_g.size().x + 6.0;
-                let br = Rect::from_min_size(egui::pos2(bx, rect.center().y - 9.0), vec2(g.size().x + 10.0, 17.0));
-                ui.painter().rect_filled(br, 8.5, if selected { p.accent_soft } else { p.surface_active });
-                ui.painter().galley(egui::pos2(br.left() + 5.0, br.center().y - g.size().y / 2.0), g, p.text_muted);
+            if let Some(g) = count_g {
+                let gx = x0 + text_g.size().x + 4.0;
+                ui.painter().galley(egui::pos2(gx, rect.center().y - g.size().y / 2.0), g, p.text_faint);
             }
             if selected {
                 let line = Rect::from_min_max(
-                    egui::pos2(rect.left() + 6.0, rect.bottom() - 2.0),
-                    egui::pos2(rect.right() - 6.0, rect.bottom()),
+                    egui::pos2(rect.left() + 4.0, rect.bottom() - 2.0),
+                    egui::pos2(rect.right() - 4.0, rect.bottom()),
                 );
-                ui.painter().rect_filled(line, 1.0, p.accent);
+                ui.painter().rect_filled(line, 0.0, p.accent);
             }
             if resp.on_hover_cursor(egui::CursorIcon::PointingHand).clicked() && !selected {
                 *current = *value;
@@ -212,6 +215,57 @@ pub fn tabs<T: PartialEq + Copy>(ui: &mut Ui, current: &mut T, items: &[(T, &str
     );
     ui.painter().set(border_idx, egui::Shape::rect_filled(full, 0.0, p.border));
     changed
+}
+
+/// Plain text toggles where the selected one sits on a light pill
+/// (e.g. Pretty / Raw / Preview).
+pub fn pill_tabs<T: PartialEq + Copy>(ui: &mut Ui, current: &mut T, items: &[(T, &str)]) -> bool {
+    let p = theme::palette(ui);
+    let mut changed = false;
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 2.0;
+        for (value, label) in items {
+            let selected = *current == *value;
+            let g = galley(ui, label, FontId::proportional(12.0), p.text);
+            let (rect, resp) = ui.allocate_exact_size(vec2(g.size().x + 16.0, 24.0), Sense::click());
+            resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, selected, *label));
+            if selected {
+                ui.painter().rect_filled(rect, 4.0, p.surface_active);
+            } else if resp.hovered() {
+                ui.painter().rect_filled(rect, 4.0, p.surface_hover);
+            }
+            let color = if selected || resp.hovered() { p.text } else { p.text_muted };
+            ui.painter().galley(rect.center() - g.size() / 2.0, g, color);
+            if resp.on_hover_cursor(egui::CursorIcon::PointingHand).clicked() && !selected {
+                *current = *value;
+                changed = true;
+            }
+        }
+    });
+    changed
+}
+
+/// A radio button with its label, laid out inline.
+pub fn radio(ui: &mut Ui, selected: bool, label: &str) -> Response {
+    let p = theme::palette(ui);
+    let g = galley(ui, label, FontId::proportional(12.5), p.text);
+    let (rect, resp) = ui.allocate_exact_size(vec2(18.0 + g.size().x + 10.0, 24.0), Sense::click());
+    resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::RadioButton, true, selected, label));
+    let c = egui::pos2(rect.left() + 7.0, rect.center().y);
+    let ring = if selected {
+        p.accent
+    } else if resp.hovered() {
+        p.text_muted
+    } else {
+        p.border_strong
+    };
+    ui.painter().circle(c, 6.5, p.input, Stroke::new(1.2_f32, ring));
+    if selected {
+        ui.painter().circle_filled(c, 3.5, p.accent);
+    }
+    let color = if selected { p.text } else { p.text_muted };
+    ui.painter().galley(egui::pos2(rect.left() + 18.0, rect.center().y - g.size().y / 2.0), g, color);
+    resp.on_hover_cursor(egui::CursorIcon::PointingHand)
 }
 
 /// Pill-shaped segmented control.
@@ -303,7 +357,7 @@ pub fn card(p: &Palette) -> egui::Frame {
 pub fn search_field(ui: &mut Ui, text: &mut String, hint: &str, width: f32) -> Response {
     let p = theme::palette(ui);
     let width = if width.is_finite() { width } else { ui.available_width() };
-    let (rect, _) = ui.allocate_exact_size(vec2(width, 30.0), Sense::hover());
+    let (rect, _) = ui.allocate_exact_size(vec2(width, 28.0), Sense::hover());
     let mut inner = None;
     ui.allocate_new_ui(UiBuilder::new().max_rect(rect), |ui| {
         let focused_id = ui.id().with("search_edit");

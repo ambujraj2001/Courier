@@ -122,7 +122,7 @@ fn send_request_and_show_response() {
     h.step();
     snapshot(&mut h, "02-response");
     h.get_by_label_contains("200 OK");
-    h.get_by_label("Tests (1/1)");
+    h.get_by_label("Test Results (1/1)");
 
     let a = app(&mut h);
     assert_eq!(a.history.entries.len(), 1);
